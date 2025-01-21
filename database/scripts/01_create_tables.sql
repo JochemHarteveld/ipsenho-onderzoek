@@ -18,5 +18,5 @@ CREATE TABLE table3 (
 
 CREATE TABLE large_table (
     id SERIAL PRIMARY KEY,
-    column TEXT NOT NULL
+    data_column TEXT NOT NULL
 );

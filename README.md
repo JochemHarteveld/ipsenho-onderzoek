@@ -2,6 +2,11 @@
 
 2. docker compose up
 
+De docker compose file start de postgresql service op. Deze voert tijdens het opstarten de scripts in database/scripts uit.
+
+- 01_create_tables.sql => Maakt de tabellen aan nodig in de configuratie die we gaan testen.
+- 02_seed_tables.sql => Vult de tabellen met random testdata.
+
 3. Verbinden met de PostgreSQL-database:
 
    Klik in pgAdmin op Add New Server.
