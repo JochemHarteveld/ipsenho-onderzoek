@@ -1,19 +1,24 @@
 #!/bin/bash
 
 # Database credentials
-DB_NAME=testdb
-DB_USER=postgres
-DB_PASS=postgres
+DB_NAME="testdb"
+DB_USER="postgres"
+DB_PASS="postgres" # Not used but retained for potential future use
 
 # PostgreSQL config file location
 PG_CONF_FILE="/etc/postgresql/postgresql.conf"
 
+# Log directory
+LOG_DIR="../logs"
+mkdir -p "$LOG_DIR"
 
 # Function to extract values from the postgresql.conf file
-extract_pg_config() {
+log_pg_config() {
+    echo "Logging PostgreSQL config..."
+
     # Extract shared_buffers and work_mem values from the config file, ignoring comments
-    SHARED_BUFFERS=$(grep -E "^\s*shared_buffers\s*=" $PG_CONF_FILE | sed 's/^[^=]*=[[:space:]]*\([^#]*\).*/\1/' | xargs)
-    WORK_MEM=$(grep -E "^\s*work_mem\s*=" $PG_CONF_FILE | sed 's/^[^=]*=[[:space:]]*\([^#]*\).*/\1/' | xargs)
+    SHARED_BUFFERS=$(grep -E "^\s*shared_buffers\s*=" "$PG_CONF_FILE" | sed 's/^[^=]*=[[:space:]]*\([^#]*\).*/\1/' | xargs)
+    WORK_MEM=$(grep -E "^\s*work_mem\s*=" "$PG_CONF_FILE" | sed 's/^[^=]*=[[:space:]]*\([^#]*\).*/\1/' | xargs)
 
     # Check if values are empty, then provide a default value
     if [ -z "$SHARED_BUFFERS" ]; then
@@ -22,37 +27,32 @@ extract_pg_config() {
     if [ -z "$WORK_MEM" ]; then
         WORK_MEM="Not Defined"
     fi
+
+    echo "shared_buffers: $SHARED_BUFFERS"
+    echo "work_mem: $WORK_MEM"
 }
 
-# Function to log the configuration values into a PostgreSQL table
-log_pg_config() {
-    echo "Logging PostgreSQL config..."
-
-    # Create a table if it doesn't exist to log the values (you can adjust schema as needed)
-    psql -U $DB_USER -d $DB_NAME -c "
-    CREATE TABLE IF NOT EXISTS config_log (
-        id SERIAL PRIMARY KEY,
-        shared_buffers TEXT,
-        work_mem TEXT,
-        log_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    "
-
-    # Insert the shared_buffers and work_mem into the table
-    psql -U $DB_USER -d $DB_NAME -c "
-    INSERT INTO config_log (shared_buffers, work_mem)
-    VALUES ('$SHARED_BUFFERS', '$WORK_MEM');
-    "
-}
-
-# Function to run benchmark queries
+# Function to run benchmark queries and log the performance into a file
 run_benchmark() {
-    echo "Running benchmark with:"
-    echo "shared_buffers = $1"
-    echo "work_mem = $2"
+
+    # Ensure shared_buffers and work_mem values are available
+    if [ -z "$SHARED_BUFFERS" ] || [ -z "$WORK_MEM" ]; then
+        echo "Error: shared_buffers or work_mem is not defined. Aborting benchmark."
+        exit 1
+    fi
+
+    # Create the log file name based on parameters and timestamp
+    TIMESTAMP=$(date +%Y%m%d%H%M%S)
+    LOG_FILE="${LOG_DIR}/sb_${SHARED_BUFFERS}_wm_${WORK_MEM}_$TIMESTAMP.txt"
+
+    # Write the configuration to the log file
+    echo "Benchmark Log for shared_buffers = $SHARED_BUFFERS and work_mem = $WORK_MEM" > "$LOG_FILE"
+    echo "Timestamp: $TIMESTAMP" >> "$LOG_FILE"
+    echo "----------------------------------------------------" >> "$LOG_FILE"
 
     # Query 1: Read-heavy with joins and aggregation
-    psql -U $DB_USER -d $DB_NAME -c "
+    echo "Running Query 1: Read-heavy with joins and aggregation" >> "$LOG_FILE"
+    query1_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         SELECT t1.name, t2.name, SUM(t3.amount)
         FROM table1 t1
@@ -61,28 +61,38 @@ run_benchmark() {
         GROUP BY t1.name, t2.name
         ORDER BY SUM(t3.amount) DESC
         LIMIT 10;
-    "
+    " | grep "Execution Time" | awk '{print $3}')
+
+    echo "Query 1 execution time: ${query1_time:-Error} ms" >> "$LOG_FILE"
 
     # Query 2: Write-heavy (INSERT)
-    psql -U $DB_USER -d $DB_NAME -c "
+    echo "Running Query 2: Write-heavy (INSERT)" >> "$LOG_FILE"
+    query2_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         INSERT INTO table1 (date, name)
         SELECT CURRENT_DATE, md5(random()::TEXT)
         FROM generate_series(1, 1000);
-    "
+    " | grep "Execution Time" | awk '{print $3}')
+
+    echo "Query 2 execution time: ${query2_time:-Error} ms" >> "$LOG_FILE"
 
     # Query 3: Large table scan
-    psql -U $DB_USER -d $DB_NAME -c "
+    echo "Running Query 3: Large table scan" >> "$LOG_FILE"
+    query3_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         SELECT COUNT(*) FROM large_table WHERE data_column LIKE 'abc%';
-    "
-}
+    " | grep "Execution Time" | awk '{print $3}')
 
-# Extract PostgreSQL config values from the postgresql.conf file
-extract_pg_config
+    echo "Query 3 execution time: ${query3_time:-Error} ms" >> "$LOG_FILE"
+
+    # Add separator for clarity
+    echo "----------------------------------------------------" >> "$LOG_FILE"
+
+    echo "Benchmark completed. Logs written to $LOG_FILE"
+}
 
 # Log PostgreSQL config to the database
 log_pg_config
 
 # Run benchmark with the extracted configuration
-run_benchmark $SHARED_BUFFERS $WORK_MEM
+run_benchmark

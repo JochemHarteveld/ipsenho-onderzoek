@@ -1,0 +1,24 @@
+Benchmark Log for shared_buffers = 128MB and work_mem = 4MB
+Timestamp: 20250121154435
+Shared Buffers: 128MB
+Work Mem: 4MB
+----------------------------------------------------
+Running Query 1: Read-heavy with joins and aggregation
+Query 1 execution time: rows=10
+(cost=1196.30..1215.50
+(cost=934.34..1030.34
+Join
+Join
+Scan
+(cost=206.80..206.80
+Scan
+(cost=206.80..206.80
+Scan ms
+Running Query 2: Write-heavy (INSERT)
+Query 2 execution time: table1
+Scan
+Scan ms
+Running Query 3: Large table scan
+Query 3 execution time: rows=1
+Scan ms
+----------------------------------------------------

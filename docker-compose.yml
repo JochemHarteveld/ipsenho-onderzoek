@@ -8,6 +8,7 @@ services:
       - ./postgresql.conf:/etc/postgresql/postgresql.conf
       - ./database/scripts:/docker-entrypoint-initdb.d
       - ./database/tests:/tests 
+      - ./logs:/logs
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
