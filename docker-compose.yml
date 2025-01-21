@@ -5,6 +5,7 @@ services:
     ports:
       - 5432:5432
     volumes:
+      - postgres-data:/var/lib/postgresql/data
       - ./postgresql.conf:/etc/postgresql/postgresql.conf
       - ./database/scripts:/docker-entrypoint-initdb.d
       - ./database/tests:/tests 
@@ -32,28 +33,9 @@ services:
     networks:
       - hemiron-net
 
-  # db-init:
-  #   image: python:3.11
-  #   depends_on:
-  #     - postgres
-  #   volumes:
-  #     - ./database:/app  # Bind mount de lokale database directory naar /app in de container
-  #   working_dir: /app    # Stel de werkdirectory in als /app
-  #   environment:
-  #     - DB_HOST=postgres
-  #     - DB_PORT=5432
-  #     - DB_NAME=testdb
-  #     - DB_USER=postgres
-  #     - DB_PASSWORD=postgres
-  #   command: >
-  #     sh -c "pip install -r requirements.txt &&
-  #            python setup_db.py"
-  #   networks:
-  #     - hemiron-net
-
 volumes:
   pgadmin-data:
-
+  postgres-data: 
 networks:
   hemiron-net:
     driver: bridge

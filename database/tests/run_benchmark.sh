@@ -12,17 +12,9 @@ PG_CONF_FILE="/etc/postgresql/postgresql.conf"
 LOG_DIR="../logs"
 mkdir -p "$LOG_DIR"
 
-# CSV file for results
-CSV_FILE="${LOG_DIR}/benchmark_results.csv"
-
-# Initialize CSV file with header if it doesn't exist
-if [ ! -f "$CSV_FILE" ]; then
-    echo "timestamp,read-heavy-query-time,write-heavy-query-time,large-table-scan-time" > "$CSV_FILE"
-fi
-
 # Function to extract values from the postgresql.conf file
 log_pg_config() {
-    echo "Logging PostgreSQL config..."
+    echo "Extracting PostgreSQL config values..."
 
     # Extract shared_buffers and work_mem values from the config file, ignoring comments
     SHARED_BUFFERS=$(grep -E "^\s*shared_buffers\s*=" "$PG_CONF_FILE" | sed 's/^[^=]*=[[:space:]]*\([^#]*\).*/\1/' | xargs)
@@ -30,23 +22,31 @@ log_pg_config() {
 
     # Check if values are empty, then provide a default value
     if [ -z "$SHARED_BUFFERS" ]; then
-        SHARED_BUFFERS="Not Defined"
+        SHARED_BUFFERS="Not_Defined"
     fi
     if [ -z "$WORK_MEM" ]; then
-        WORK_MEM="Not Defined"
+        WORK_MEM="Not_Defined"
     fi
 
-    echo "shared_buffers: $SHARED_BUFFERS"
-    echo "work_mem: $WORK_MEM"
+    echo "Shared Buffers: $SHARED_BUFFERS"
+    echo "Work Mem: $WORK_MEM"
 }
 
-# Function to run benchmark queries and log the performance into a CSV file
+# Function to run benchmark queries and log the performance into a dynamically named CSV file
 run_benchmark() {
 
     # Ensure shared_buffers and work_mem values are available
     if [ -z "$SHARED_BUFFERS" ] || [ -z "$WORK_MEM" ]; then
         echo "Error: shared_buffers or work_mem is not defined. Aborting benchmark."
         exit 1
+    fi
+
+    # Dynamically construct the CSV file name
+    CSV_FILE="${LOG_DIR}/benchmark_results_SB_${SHARED_BUFFERS}_WM_${WORK_MEM}.csv"
+
+    # Initialize CSV file with a header if it doesn't exist
+    if [ ! -f "$CSV_FILE" ]; then
+        echo "timestamp,read-heavy-query-time,write-heavy-query-time,large-table-scan-time" > "$CSV_FILE"
     fi
 
     # Timestamp for this benchmark
@@ -78,14 +78,29 @@ run_benchmark() {
         SELECT COUNT(*) FROM large_table WHERE data_column LIKE 'abc%';
     " | grep "Execution Time" | awk '{print $3}')
 
-    # Write the results to the CSV file
+    # Append the results to the CSV file
     echo "${TIMESTAMP},${query1_time:-Error},${query2_time:-Error},${query3_time:-Error}" >> "$CSV_FILE"
-
-    echo "Benchmark completed. Results written to $CSV_FILE"
 }
 
-# Log PostgreSQL config to the database
+# Ensure the user provides the number of tests as an argument
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <number_of_tests>"
+    exit 1
+fi
+
+# Number of iterations
+NUM_TESTS=$1
+
+# Extract PostgreSQL configuration values
 log_pg_config
 
-# Run benchmark with the extracted configuration
-run_benchmark
+# Run the benchmark the specified number of times
+for ((i=1; i<=NUM_TESTS; i++)); do
+    echo "Running test $i of $NUM_TESTS..."
+    run_benchmark
+done
+
+# Display all the results from the CSV file
+CSV_FILE="${LOG_DIR}/benchmark_results_SB_${SHARED_BUFFERS}_WM_${WORK_MEM}.csv"
+echo "All tests completed. Results:"
+cat "$CSV_FILE"
