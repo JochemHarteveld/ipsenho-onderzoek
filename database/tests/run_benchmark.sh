@@ -12,6 +12,14 @@ PG_CONF_FILE="/etc/postgresql/postgresql.conf"
 LOG_DIR="../logs"
 mkdir -p "$LOG_DIR"
 
+# CSV file for results
+CSV_FILE="${LOG_DIR}/benchmark_results.csv"
+
+# Initialize CSV file with header if it doesn't exist
+if [ ! -f "$CSV_FILE" ]; then
+    echo "timestamp,read-heavy-query-time,write-heavy-query-time,large-table-scan-time" > "$CSV_FILE"
+fi
+
 # Function to extract values from the postgresql.conf file
 log_pg_config() {
     echo "Logging PostgreSQL config..."
@@ -32,7 +40,7 @@ log_pg_config() {
     echo "work_mem: $WORK_MEM"
 }
 
-# Function to run benchmark queries and log the performance into a file
+# Function to run benchmark queries and log the performance into a CSV file
 run_benchmark() {
 
     # Ensure shared_buffers and work_mem values are available
@@ -41,17 +49,10 @@ run_benchmark() {
         exit 1
     fi
 
-    # Create the log file name based on parameters and timestamp
-    TIMESTAMP=$(date +%Y%m%d%H%M%S)
-    LOG_FILE="${LOG_DIR}/sb_${SHARED_BUFFERS}_wm_${WORK_MEM}_$TIMESTAMP.txt"
-
-    # Write the configuration to the log file
-    echo "Benchmark Log for shared_buffers = $SHARED_BUFFERS and work_mem = $WORK_MEM" > "$LOG_FILE"
-    echo "Timestamp: $TIMESTAMP" >> "$LOG_FILE"
-    echo "----------------------------------------------------" >> "$LOG_FILE"
+    # Timestamp for this benchmark
+    TIMESTAMP=$(date +%Y-%m-%dT%H:%M:%S)
 
     # Query 1: Read-heavy with joins and aggregation
-    echo "Running Query 1: Read-heavy with joins and aggregation" >> "$LOG_FILE"
     query1_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         SELECT t1.name, t2.name, SUM(t3.amount)
@@ -63,10 +64,7 @@ run_benchmark() {
         LIMIT 10;
     " | grep "Execution Time" | awk '{print $3}')
 
-    echo "Query 1 execution time: ${query1_time:-Error} ms" >> "$LOG_FILE"
-
     # Query 2: Write-heavy (INSERT)
-    echo "Running Query 2: Write-heavy (INSERT)" >> "$LOG_FILE"
     query2_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         INSERT INTO table1 (date, name)
@@ -74,21 +72,16 @@ run_benchmark() {
         FROM generate_series(1, 1000);
     " | grep "Execution Time" | awk '{print $3}')
 
-    echo "Query 2 execution time: ${query2_time:-Error} ms" >> "$LOG_FILE"
-
     # Query 3: Large table scan
-    echo "Running Query 3: Large table scan" >> "$LOG_FILE"
     query3_time=$(psql -U "$DB_USER" -d "$DB_NAME" -t -c "
         EXPLAIN ANALYZE
         SELECT COUNT(*) FROM large_table WHERE data_column LIKE 'abc%';
     " | grep "Execution Time" | awk '{print $3}')
 
-    echo "Query 3 execution time: ${query3_time:-Error} ms" >> "$LOG_FILE"
+    # Write the results to the CSV file
+    echo "${TIMESTAMP},${query1_time:-Error},${query2_time:-Error},${query3_time:-Error}" >> "$CSV_FILE"
 
-    # Add separator for clarity
-    echo "----------------------------------------------------" >> "$LOG_FILE"
-
-    echo "Benchmark completed. Logs written to $LOG_FILE"
+    echo "Benchmark completed. Results written to $CSV_FILE"
 }
 
 # Log PostgreSQL config to the database
