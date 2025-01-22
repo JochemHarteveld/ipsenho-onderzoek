@@ -82,6 +82,15 @@ run_benchmark() {
     echo "${TIMESTAMP},${query1_time:-Error},${query2_time:-Error},${query3_time:-Error}" >> "$CSV_FILE"
 }
 
+# Function to calculate and append averages to the CSV file
+append_averages() {
+    local CSV_FILE=$1
+
+    # Use awk to calculate the average of each column (ignoring the header row)
+    awk -F, 'NR > 1 { sum1 += $2; sum2 += $3; sum3 += $4; count++ }
+             END { if (count > 0) print "Average", sum1/count, sum2/count, sum3/count }' OFS=, "$CSV_FILE" >> "$CSV_FILE"
+}
+
 # Ensure the user provides the number of tests as an argument
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <number_of_tests>"
@@ -100,7 +109,10 @@ for ((i=1; i<=NUM_TESTS; i++)); do
     run_benchmark
 done
 
-# Display all the results from the CSV file
+# Append averages to the CSV file
 CSV_FILE="${LOG_DIR}/benchmark_results_SB_${SHARED_BUFFERS}_WM_${WORK_MEM}.csv"
+append_averages "$CSV_FILE"
+
+# Display all the results from the CSV file
 echo "All tests completed. Results:"
 cat "$CSV_FILE"
