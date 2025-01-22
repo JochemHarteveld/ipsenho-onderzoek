@@ -19,20 +19,6 @@ services:
       - hemiron-net
     restart: unless-stopped
 
-  pgadmin:
-    image: dpage/pgadmin4
-    depends_on:
-      - postgres
-    ports:
-      - "80:80"  # Verbind poort 80 op de host naar poort 80 op de container
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@example.com  # Je pgAdmin login email
-      - PGADMIN_DEFAULT_PASSWORD=admin  # Je pgAdmin login wachtwoord
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin  # Behoud pgAdmin instellingen
-    networks:
-      - hemiron-net
-
 volumes:
   pgadmin-data:
   postgres-data: 
